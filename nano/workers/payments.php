@@ -11,7 +11,8 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 Runtime::enableCoroutine();
 
-$coroutines = swoole_cpu_num() * 2;
+$cpus = swoole_cpu_num();
+$coroutines = intval($cpus * 2.5);
 echo "[WorkerDefault] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
 
 for ($i = 0; $i < $coroutines; $i++) {
@@ -22,19 +23,16 @@ for ($i = 0; $i < $coroutines; $i++) {
         while (true) {
             $data = $redis->brPop('payment_jobs', 1);
 
-            $payload = isset($data[1]) ? json_decode($data[1], true) : null;
+            $payload = getPayload($data);
             if (!$payload) {
                 continue;
             }
 
-            if (!is_array($payload) || empty($payload['correlationId']) || empty($payload['amount'])) {
+            if (!is_object($payload) || empty($payload->correlationId) || empty($payload->amount)) {
                 continue;
             }
 
-            $correlationId = $payload['correlationId'];
-            $amount = (float)$payload['amount'];
-
-            if ($redis->exists($correlationId)) {
+            if ($redis->exists($payload->correlationId)) {
                 continue;
             }
 
@@ -50,8 +48,8 @@ for ($i = 0; $i < $coroutines; $i++) {
             $requestedAt = $datetime->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
 
             $body = [
-                'correlationId' => $correlationId,
-                'amount' => $amount,
+                'correlationId' => $payload->correlationId,
+                'amount' => $payload->amount,
                 'requestedAt' => $requestedAt,
             ];
 
@@ -59,19 +57,20 @@ for ($i = 0; $i < $coroutines; $i++) {
 
             if (!$success) {
                 $payload = addRetry($payload);
-                if (($payload['retry'] ?? 0) < 2) {
+                if (($payload->retry ?? 0) < 2) {
                     $redis->lPush('payment_jobs', json_encode($payload));
                 }
                 continue;
             }
 
-            $redis->setex($correlationId, 86400, 1);
-            $entry = "{$correlationId}:" . ((int)round($amount * 100));
+            $redis->setex($payload->correlationId, 86400, 1);
+            $entry = "{$payload->correlationId}:" . ((int)round($payload->amount * 100));
             $redis->zAdd("payments:default", $now, $entry);
         }
     });
 }
 
+$coroutines = $cpus * 2;
 echo "[WorkerFallback] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
 
 for ($i = 0; $i < $coroutines; $i++) {
@@ -87,14 +86,11 @@ for ($i = 0; $i < $coroutines; $i++) {
                 continue;
             }
 
-            if (!is_array($payload) || empty($payload['correlationId']) || empty($payload['amount'])) {
+            if (!is_object($payload) || empty($payload->correlationId) || empty($payload->amount)) {
                 continue;
             }
 
-            $correlationId = $payload['correlationId'];
-            $amount = (float)$payload['amount'];
-
-            if ($redis->exists($correlationId)) {
+            if ($redis->exists($payload->correlationId)) {
                 continue;
             }
 
@@ -103,8 +99,8 @@ for ($i = 0; $i < $coroutines; $i++) {
             $requestedAt = $datetime->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
 
             $body = [
-                'correlationId' => $correlationId,
-                'amount' => $amount,
+                'correlationId' => $payload->correlationId,
+                'amount' => $payload->amount,
                 'requestedAt' => $requestedAt,
             ];
 
@@ -112,14 +108,14 @@ for ($i = 0; $i < $coroutines; $i++) {
 
             if (!$success) {
                 $payload = addRetry($payload);
-                if (($payload['retry'] ?? 0) < 2) {
+                if (($payload->retry ?? 0) < 2) {
                     $redis->lPush('payment_jobs_fallback', json_encode($payload));
                 }
                 continue;
             }
 
-            $redis->setex($correlationId, 86400, 1);
-            $entry = "{$correlationId}:" . ((int)round($amount * 100));
+            $redis->setex($payload->correlationId, 86400, 1);
+            $entry = "{$payload->correlationId}:" . ((int)round($payload->amount * 100));
             $redis->zAdd("payments:fallback", $now, $entry);
         }
     });
@@ -131,7 +127,7 @@ function pay(string $processor, array $data): bool
     $client->setHeaders([
         'Content-Type' => 'application/json',
     ]);
-    $client->set(['timeout' => 2]);
+    $client->set(['timeout' => 2.5]);
     $client->post('/payments', json_encode($data));
     $status = $client->getStatusCode();
     $client->close();
@@ -139,14 +135,14 @@ function pay(string $processor, array $data): bool
     return $status >= 200 && $status < 300;
 }
 
-function getPayload(?array $data): ?array
+function getPayload(?array $data): ?object
 {
-    return isset($data[1]) ? json_decode($data[1], true) : null;
+    return isset($data[1]) ? json_decode($data[1], false) : null;
 }
 
-function addRetry(array $payload): array
+function addRetry(object $payload): object
 {
-    $payload['retry'] = ($payload['retry'] ?? 0) + 1;
+    $payload->retry = ($payload->retry ?? 0) + 1;
     return $payload;
 }
 
