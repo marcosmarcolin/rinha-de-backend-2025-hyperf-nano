@@ -26,12 +26,11 @@ $app->post('/payments', function () use ($container) {
         return $response->withStatus(400)->json(['error' => 'Invalid payload']);
     }
 
-    $job = [
+    $redis = $container->get(RedisFactory::class)->get('default');
+    $redis->lPush('payment_jobs', json_encode([
         'correlationId' => $correlationId,
         'amount' => (float)$amount
-    ];
-    $redis = $container->get(RedisFactory::class)->get('default');
-    $redis->lPush('payment_jobs', json_encode($job));
+    ]));
 
     return $response->withStatus(200)->json(['message' => 'Accepted']);
 });

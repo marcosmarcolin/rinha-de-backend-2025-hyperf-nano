@@ -1,4 +1,4 @@
-FROM hyperf/hyperf:8.3-alpine-v3.19-swoole
+FROM hyperf/hyperf:8.3-alpine-v3.21-swoole
 
 ARG TIMEZONE=UTC
 

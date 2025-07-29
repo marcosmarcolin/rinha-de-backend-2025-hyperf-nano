@@ -3,7 +3,7 @@ x-service-templates:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: marcosmarcolin/rinha-backend-2025-api
+    image: marcosmarcolin/rinha-de-backend-2025-php
     entrypoint: [ "php", "/opt/www/nano/public/index.php", 'start' ]
     depends_on:
       redis:
@@ -62,7 +62,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.2"
+          cpus: "0.3"
           memory: "70M"
 
   redis:

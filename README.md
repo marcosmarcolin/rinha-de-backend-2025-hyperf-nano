@@ -1,16 +1,28 @@
 # Rinha de Backend 2025
 
-Este projeto utiliza **PHP 8.3 com Swoole e Hyperf Nano** para entregar alta performance em um ambiente de concorrência.
+Este projeto utiliza **PHP 8.3 com Swoole e Hyperf Nano** para entregar alta performance em um ambiente de concorrÃªncia.
 
-A solução é baseada em:
+A soluÃ§Ã£o Ã© baseada em:
 
 - **Hyperf Nano**: framework minimalista com suporte a corrotinas.
-- **Swoole**: extensão para PHP com programação assíncrona e alta performance.
-- **Redis**: fila de mensagens e armazenamento intermediário.
-- **Docker**: ambiente isolado e reprodutível.
+- **Swoole**: extensÃ£o para PHP com programaÃ§Ã£o assÃ­ncrona e alta performance.
+- **Redis**: fila de mensagens e armazenamento intermediÃ¡rio.
+- **Docker**: ambiente isolado e reprodutÃ­vel.
 - **Nginx**: proxy reverso para balanceamento entre APIs.
 
-## Instruções de uso
+## Limites de CPU e MemÃ³ria por ServiÃ§o (Docker)
+
+| ServiÃ§o         | CPU      | MemÃ³ria (MB) |
+|-----------------|----------|--------------|
+| api01           | 0.35     | 80           |
+| api02           | 0.35     | 80           |
+| worker-payments | 0.30     | 50           |
+| worker-health   | 0.15     | 40           |
+| nginx           | 0.20     | 70           |
+| redis           | 0.15     | 30           |
+| **Total**       | **1.50** | **350**      |
+
+## InstruÃ§Ãµes de uso
 
 > Para rodar o ambiente completo, basta usar o `make`:
 
