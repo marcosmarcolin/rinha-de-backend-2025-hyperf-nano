@@ -1,0 +1,23 @@
+{
+  "name": "marcosmarcolin/rinha-backend-2025",
+  "description": "Backend da Rinha de Backend 2025 utilizando Hyperf Nano e Swoole",
+  "type": "project",
+  "authors": [
+    {
+      "name": "Marcos Marcolin",
+      "email": "marcolindev@gmail.com"
+    }
+  ],
+  "require": {
+    "hyperf/nano": "^2.0",
+    "hyperf/redis": "^3.1",
+    "swoole/ide-helper": "^6.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "MarcosMarcolin\\Rinha\\": "src/"
+    }
+  },
+  "minimum-stability": "stable",
+  "license": "MIT"
+}
