@@ -8,8 +8,8 @@ return [
             'port' => 6379,
             'db' => 0,
             'pool' => [
-                'min_connections' => 1,
-                'max_connections' => 500,
+                'min_connections' => 5,
+                'max_connections' => 250,
                 'connect_timeout' => 10.0,
                 'wait_timeout' => 3.0,
                 'heartbeat' => -1,

@@ -58,7 +58,10 @@ for ($i = 0; $i < $coroutines; $i++) {
             $success = pay('default', $body);
 
             if (!$success) {
-                $redis->lPush('payment_jobs', json_encode($payload));
+                $payload = addRetry($payload);
+                if (($payload['retry'] ?? 0) < 2) {
+                    $redis->lPush('payment_jobs', json_encode($payload));
+                }
                 continue;
             }
 
@@ -70,11 +73,6 @@ for ($i = 0; $i < $coroutines; $i++) {
 }
 
 echo "[WorkerFallback] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
-
-function getPayload(?array $data): ?array
-{
-    return isset($data[1]) ? json_decode($data[1], true) : null;
-}
 
 for ($i = 0; $i < $coroutines; $i++) {
     Coroutine::create(function () {
@@ -113,7 +111,10 @@ for ($i = 0; $i < $coroutines; $i++) {
             $success = pay('fallback', $body);
 
             if (!$success) {
-                $redis->lPush('payment_jobs_fallback', json_encode($payload));
+                $payload = addRetry($payload);
+                if (($payload['retry'] ?? 0) < 2) {
+                    $redis->lPush('payment_jobs_fallback', json_encode($payload));
+                }
                 continue;
             }
 
@@ -136,6 +137,17 @@ function pay(string $processor, array $data): bool
     $client->close();
 
     return $status >= 200 && $status < 300;
+}
+
+function getPayload(?array $data): ?array
+{
+    return isset($data[1]) ? json_decode($data[1], true) : null;
+}
+
+function addRetry(array $payload): array
+{
+    $payload['retry'] = ($payload['retry'] ?? 0) + 1;
+    return $payload;
 }
 
 Swoole\Event::wait();

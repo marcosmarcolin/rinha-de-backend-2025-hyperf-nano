@@ -28,8 +28,7 @@ $app->post('/payments', function () use ($container) {
 
     $job = [
         'correlationId' => $correlationId,
-        'amount' => (float)$amount,
-        'requestedAt' => gmdate('Y-m-d\TH:i:s.u\Z'),
+        'amount' => (float)$amount
     ];
     $redis = $container->get(RedisFactory::class)->get('default');
     $redis->lPush('payment_jobs', json_encode($job));
@@ -79,6 +78,5 @@ function toFloatTimestamp(?string $dateString): ?float
 
     return $date ? (float)$date->format('U.u') : null;
 }
-
 
 $app->run();

@@ -36,10 +36,7 @@ Coroutine::create(function () use ($redis) {
         $best = chooseProcessor($results);
 
         if ($best) {
-            echo "[WorkerHealth] Melhor host: $best" . PHP_EOL;
-            $redis->setex('processor', 8, $best);
-        } else {
-            echo "[WorkerHealth] Nenhum host saudável encontrado." . PHP_EOL;
+            $redis->setex('processor', 7, $best);
         }
 
         Coroutine::sleep(5);

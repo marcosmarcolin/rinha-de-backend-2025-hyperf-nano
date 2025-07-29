@@ -7,9 +7,6 @@ ENV TIMEZONE=${TIMEZONE} \
     SCAN_CACHEABLE=false
 
 RUN set -ex \
-    && php -v \
-    && php -m \
-    && php --ri swoole \
     && cd /etc/php* \
     && { \
         echo "upload_max_filesize=128M"; \
@@ -39,8 +36,10 @@ RUN set -ex \
 
 WORKDIR /opt/www/nano
 
-COPY nano/ ./
-
 COPY nano/composer.json nano/composer.lock ./
+
+RUN composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction && composer clear-cache
+
+COPY nano/ ./
 
 RUN composer i --no-dev -o --no-interaction

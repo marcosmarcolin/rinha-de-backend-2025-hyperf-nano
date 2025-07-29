@@ -1,7 +1,8 @@
 # Rinha de Backend 2025
 
-Este projeto utiliza **PHP 8.3 com Swoole e Hyperf Nano** para entregar alta performance em um ambiente de concorrência
-extrema. A solução é baseada em:
+Este projeto utiliza **PHP 8.3 com Swoole e Hyperf Nano** para entregar alta performance em um ambiente de concorrência.
+
+A solução é baseada em:
 
 - **Hyperf Nano**: framework minimalista com suporte a corrotinas.
 - **Swoole**: extensão para PHP com programação assíncrona e alta performance.
