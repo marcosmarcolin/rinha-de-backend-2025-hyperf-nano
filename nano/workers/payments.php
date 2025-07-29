@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use MarcosMarcolin\Rinha\HttpRequest as HttpRequestAlias;
 use Swoole\Coroutine;
+use Swoole\Coroutine\Http\Client;
 use Swoole\Runtime;
 
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -21,11 +22,10 @@ for ($i = 0; $i < $coroutines; $i++) {
         while (true) {
             $data = $redis->brPop('payment_jobs', 1);
 
-            if (!$data || !isset($data[1])) {
+            $payload = isset($data[1]) ? json_decode($data[1], true) : null;
+            if (!$payload) {
                 continue;
             }
-
-            $payload = json_decode($data[1], true);
 
             if (!is_array($payload) || empty($payload['correlationId']) || empty($payload['amount'])) {
                 continue;
@@ -55,7 +55,7 @@ for ($i = 0; $i < $coroutines; $i++) {
                 'requestedAt' => $requestedAt,
             ];
 
-            $success = HttpRequestAlias::sendPayment('default', $body);
+            $success = pay('default', $body);
 
             if (!$success) {
                 $redis->lPush('payment_jobs', json_encode($payload));
@@ -71,6 +71,11 @@ for ($i = 0; $i < $coroutines; $i++) {
 
 echo "[WorkerFallback] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
 
+function getPayload(?array $data): ?array
+{
+    return isset($data[1]) ? json_decode($data[1], true) : null;
+}
+
 for ($i = 0; $i < $coroutines; $i++) {
     Coroutine::create(function () {
         $redis = new Redis();
@@ -79,11 +84,10 @@ for ($i = 0; $i < $coroutines; $i++) {
         while (true) {
             $data = $redis->brPop('payment_jobs_fallback', 1);
 
-            if (!$data || !isset($data[1])) {
+            $payload = getPayload($data);
+            if (!$payload) {
                 continue;
             }
-
-            $payload = json_decode($data[1], true);
 
             if (!is_array($payload) || empty($payload['correlationId']) || empty($payload['amount'])) {
                 continue;
@@ -106,7 +110,7 @@ for ($i = 0; $i < $coroutines; $i++) {
                 'requestedAt' => $requestedAt,
             ];
 
-            $success = HttpRequestAlias::sendPayment('fallback', $body);
+            $success = pay('fallback', $body);
 
             if (!$success) {
                 $redis->lPush('payment_jobs_fallback', json_encode($payload));
@@ -118,6 +122,20 @@ for ($i = 0; $i < $coroutines; $i++) {
             $redis->zAdd("payments:fallback", $now, $entry);
         }
     });
+}
+
+function pay(string $processor, array $data): bool
+{
+    $client = new Client("payment-processor-{$processor}", 8080);
+    $client->setHeaders([
+        'Content-Type' => 'application/json',
+    ]);
+    $client->set(['timeout' => 2]);
+    $client->post('/payments', json_encode($data));
+    $status = $client->getStatusCode();
+    $client->close();
+
+    return $status >= 200 && $status < 300;
 }
 
 Swoole\Event::wait();

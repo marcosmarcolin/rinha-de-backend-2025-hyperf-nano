@@ -21,8 +21,8 @@ Coroutine::create(function () use ($redis) {
     while (true) {
         $channel = new Channel(2);
 
-        Coroutine::create(fn() => $channel->push(['default' => getHealth('payment-processor-default')]));
-        Coroutine::create(fn() => $channel->push(['fallback' => getHealth('payment-processor-fallback')]));
+        Coroutine::create(fn() => $channel->push(['default' => checkProcessorHealth('payment-processor-default')]));
+        Coroutine::create(fn() => $channel->push(['fallback' => checkProcessorHealth('payment-processor-fallback')]));
 
         $results = [];
         for ($i = 0; $i < 2; $i++) {
@@ -46,9 +46,7 @@ Coroutine::create(function () use ($redis) {
     }
 });
 
-Event::wait();
-
-function getHealth(string $host): ?array
+function checkProcessorHealth(string $host): ?array
 {
     $client = new Client($host, 8080);
     $client->set(['timeout' => 2.5]);
@@ -84,3 +82,5 @@ function chooseProcessor(array $hosts): ?string
 
     return null;
 }
+
+Event::wait();

@@ -7,7 +7,6 @@ use Hyperf\HttpServer\Contract\RequestInterface;
 use Hyperf\HttpServer\Contract\ResponseInterface;
 use Hyperf\Redis\Redis;
 use Hyperf\Redis\RedisFactory;
-use MarcosMarcolin\Rinha\HttpRequest as HttpRequestAlias;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -15,7 +14,7 @@ $app = AppFactory::create();
 $app->config(require __DIR__ . '/../config/app.php');
 $container = $app->getContainer();
 
-$app->post(HttpRequestAlias::URI_PAYMENTS, function () use ($container) {
+$app->post('/payments', function () use ($container) {
     $request = $container->get(RequestInterface::class);
     $response = $container->get(ResponseInterface::class);
 
@@ -38,14 +37,14 @@ $app->post(HttpRequestAlias::URI_PAYMENTS, function () use ($container) {
     return $response->withStatus(200)->json(['message' => 'Accepted']);
 });
 
-$app->get(HttpRequestAlias::URI_PAYMENTS_PURGE, function () use ($container) {
+$app->get('/purge-payments', function () use ($container) {
     $response = $container->get(ResponseInterface::class);
     $redis = $container->get(Redis::class);
     $redis->flushAll();
     return $response->withStatus(204);
 });
 
-$app->get(HttpRequestAlias::URI_PAYMENTS_SUMMARY, function () use ($container) {
+$app->get('/payments-summary', function () use ($container) {
     $request = $container->get(RequestInterface::class);
     $response = $container->get(ResponseInterface::class);
     $redis = $container->get(Redis::class);
@@ -69,8 +68,6 @@ $app->get(HttpRequestAlias::URI_PAYMENTS_SUMMARY, function () use ($container) {
     return $response->withStatus(200)->json($summary);
 });
 
-$app->run();
-
 function toFloatTimestamp(?string $dateString): ?float
 {
     if (!$dateString) {
@@ -82,3 +79,6 @@ function toFloatTimestamp(?string $dateString): ?float
 
     return $date ? (float)$date->format('U.u') : null;
 }
+
+
+$app->run();

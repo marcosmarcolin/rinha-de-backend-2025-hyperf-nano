@@ -44,4 +44,3 @@ COPY nano/ ./
 COPY nano/composer.json nano/composer.lock ./
 
 RUN composer i --no-dev -o --no-interaction
-
