@@ -12,7 +12,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 Runtime::enableCoroutine();
 
 $cpus = swoole_cpu_num();
-$coroutines = intval($cpus * 2.5);
+$coroutines = $cpus * 4;
 echo "[WorkerDefault] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
 
 for ($i = 0; $i < $coroutines; $i++) {
@@ -70,7 +70,7 @@ for ($i = 0; $i < $coroutines; $i++) {
     });
 }
 
-$coroutines = $cpus * 2;
+$coroutines = $cpus * 3;
 echo "[WorkerFallback] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
 
 for ($i = 0; $i < $coroutines; $i++) {
