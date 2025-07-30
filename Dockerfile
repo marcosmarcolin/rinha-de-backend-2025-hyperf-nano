@@ -41,5 +41,3 @@ COPY nano/composer.json nano/composer.lock ./
 RUN composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction && composer clear-cache
 
 COPY nano/ ./
-
-RUN composer i --no-dev -o --no-interaction
