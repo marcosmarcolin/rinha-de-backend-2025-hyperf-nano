@@ -7,17 +7,17 @@ A solução é baseada em:
 - **Swoole**: extensão para PHP com programação assíncrona e alta performance.
 - **Redis**: fila de mensagens e armazenamento intermediário.
 - **Docker**: ambiente isolado e reprodutível.
-- **Nginx**: proxy reverso para balanceamento entre APIs.
+- **HAProxy**: proxy reverso leve e eficiente para balanceamento de carga.
 
 ## Limites de CPU e Memória por Serviço (Docker)
 
 | Serviço         | CPU      | Memória (MB) |
 |-----------------|----------|--------------|
-| api01           | 0.35     | 80           |
-| api02           | 0.35     | 80           |
-| worker-payments | 0.30     | 60           |
-| worker-health   | 0.15     | 30           |
-| nginx           | 0.20     | 70           |
+| api01           | 0.35     | 100          |
+| api02           | 0.35     | 100          |
+| worker-payments | 0.30     | 50           |
+| worker-health   | 0.15     | 20           |
+| haproxy         | 0.20     | 50           |
 | redis           | 0.15     | 30           |
 | **Total**       | **1.50** | **350**      |
 
