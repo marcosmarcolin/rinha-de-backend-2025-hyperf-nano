@@ -3,120 +3,129 @@
 declare(strict_types=1);
 
 use Swoole\Coroutine;
+use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\Http\Client;
 use Swoole\Runtime;
 
 Runtime::enableCoroutine();
 
 $cpus = swoole_cpu_num();
-$coroutines = min(20, $cpus * 10);
-echo "[WorkerDefault] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
+$defaultCoroutines = min(20, $cpus * 10);
+$fallbackCoroutines = min(16, $cpus * 10);
+$poolSize = intval(($defaultCoroutines + $fallbackCoroutines) * 1.1);
+$RedisPool = new Channel($poolSize);
 
-for ($i = 0; $i < $coroutines; $i++) {
-    Coroutine::create(function () {
-        $redis = new Redis();
-        $redis->connect('redis');
+Coroutine::create(function () use ($poolSize, $RedisPool, $defaultCoroutines, $fallbackCoroutines) {
+    for ($i = 0; $i < $poolSize; $i++) {
+        $Redis = new Redis();
+        $Redis->connect('redis');
+        $RedisPool->push($Redis);
+    }
 
-        while (true) {
-            $data = $redis->brPop('payment_jobs', 1);
+    echo "[RedisPool] {$poolSize} conexões Redis disponíveis para Coroutines" . PHP_EOL;
 
-            $payload = getPayload($data);
-            if (!$payload) {
-                continue;
-            }
+    echo "[WorkerDefault] Iniciando processamento com {$defaultCoroutines} Coroutines" . PHP_EOL;
 
-            if (!is_object($payload) || empty($payload->correlationId) || empty($payload->amount)) {
-                continue;
-            }
+    for ($i = 0; $i < $defaultCoroutines; $i++) {
+        Coroutine::create(function () use ($RedisPool) {
+            while (true) {
+                $redis = $RedisPool->pop();
 
-            if ($redis->exists($payload->correlationId)) {
-                continue;
-            }
+                try {
+                    $data = $redis->brPop('payment_jobs', 1);
+                    $payload = getPayload($data);
+                    if (!$payload || !is_object($payload) || empty($payload->correlationId) || empty($payload->amount)) {
+                        continue;
+                    }
 
-            $processor = $redis->get('processor');
+                    if ($redis->exists($payload->correlationId)) {
+                        continue;
+                    }
 
-            if ($processor === 'fallback') {
-                $redis->lPush('payment_jobs_fallback', json_encode($payload));
-                continue;
-            }
+                    $processor = $redis->get('processor');
+                    if ($processor === 'fallback') {
+                        $redis->lPush('payment_jobs_fallback', json_encode($payload));
+                        continue;
+                    }
 
-            $now = microtime(true);
-            $datetime = DateTime::createFromFormat('U.u', sprintf('%.6f', $now));
-            $requestedAt = $datetime->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
+                    $now = microtime(true);
+                    $datetime = DateTime::createFromFormat('U.u', sprintf('%.6f', $now));
+                    $requestedAt = $datetime->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
 
-            $body = [
-                'correlationId' => $payload->correlationId,
-                'amount' => $payload->amount,
-                'requestedAt' => $requestedAt,
-            ];
+                    $body = [
+                        'correlationId' => $payload->correlationId,
+                        'amount' => $payload->amount,
+                        'requestedAt' => $requestedAt,
+                    ];
 
-            $success = pay('default', $body);
+                    $success = pay('default', $body);
 
-            if (!$success) {
-                $payload = addRetry($payload);
-                if (($payload->retry ?? 0) < 2) {
-                    $redis->lPush('payment_jobs', json_encode($payload));
+                    if (!$success) {
+                        $payload = addRetry($payload);
+                        if (($payload->retry ?? 0) < 2) {
+                            $redis->lPush('payment_jobs', json_encode($payload));
+                        }
+                        continue;
+                    }
+
+                    $redis->setex($payload->correlationId, 86400, 1);
+                    $entry = "{$payload->correlationId}:" . ((int)round($payload->amount * 100));
+                    $redis->zAdd("payments:default", $now, $entry);
+                } finally {
+                    $RedisPool->push($redis);
                 }
-                continue;
             }
+        });
+    }
 
-            $redis->setex($payload->correlationId, 86400, 1);
-            $entry = "{$payload->correlationId}:" . ((int)round($payload->amount * 100));
-            $redis->zAdd("payments:default", $now, $entry);
-        }
-    });
-}
+    echo "[WorkerFallback] Iniciando processamento com {$fallbackCoroutines} Coroutines" . PHP_EOL;
 
-$coroutines = min(16, $cpus * 10);
-echo "[WorkerFallback] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
+    for ($i = 0; $i < $fallbackCoroutines; $i++) {
+        Coroutine::create(function () use ($RedisPool) {
+            while (true) {
+                $redis = $RedisPool->pop();
 
-for ($i = 0; $i < $coroutines; $i++) {
-    Coroutine::create(function () {
-        $redis = new Redis();
-        $redis->connect('redis');
+                try {
+                    $data = $redis->brPop('payment_jobs_fallback', 1);
+                    $payload = getPayload($data);
+                    if (!$payload || !is_object($payload) || empty($payload->correlationId) || empty($payload->amount)) {
+                        continue;
+                    }
 
-        while (true) {
-            $data = $redis->brPop('payment_jobs_fallback', 1);
+                    if ($redis->exists($payload->correlationId)) {
+                        continue;
+                    }
 
-            $payload = getPayload($data);
-            if (!$payload) {
-                continue;
-            }
+                    $now = microtime(true);
+                    $datetime = DateTime::createFromFormat('U.u', sprintf('%.6f', $now));
+                    $requestedAt = $datetime->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
 
-            if (!is_object($payload) || empty($payload->correlationId) || empty($payload->amount)) {
-                continue;
-            }
+                    $body = [
+                        'correlationId' => $payload->correlationId,
+                        'amount' => $payload->amount,
+                        'requestedAt' => $requestedAt,
+                    ];
 
-            if ($redis->exists($payload->correlationId)) {
-                continue;
-            }
+                    $success = pay('fallback', $body);
 
-            $now = microtime(true);
-            $datetime = DateTime::createFromFormat('U.u', sprintf('%.6f', $now));
-            $requestedAt = $datetime->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
+                    if (!$success) {
+                        $payload = addRetry($payload);
+                        if (($payload->retry ?? 0) < 2) {
+                            $redis->lPush('payment_jobs_fallback', json_encode($payload));
+                        }
+                        continue;
+                    }
 
-            $body = [
-                'correlationId' => $payload->correlationId,
-                'amount' => $payload->amount,
-                'requestedAt' => $requestedAt,
-            ];
-
-            $success = pay('fallback', $body);
-
-            if (!$success) {
-                $payload = addRetry($payload);
-                if (($payload->retry ?? 0) < 2) {
-                    $redis->lPush('payment_jobs_fallback', json_encode($payload));
+                    $redis->setex($payload->correlationId, 86400, 1);
+                    $entry = "{$payload->correlationId}:" . ((int)round($payload->amount * 100));
+                    $redis->zAdd("payments:fallback", $now, $entry);
+                } finally {
+                    $RedisPool->push($redis);
                 }
-                continue;
             }
-
-            $redis->setex($payload->correlationId, 86400, 1);
-            $entry = "{$payload->correlationId}:" . ((int)round($payload->amount * 100));
-            $redis->zAdd("payments:fallback", $now, $entry);
-        }
-    });
-}
+        });
+    }
+});
 
 function pay(string $processor, array $data): bool
 {

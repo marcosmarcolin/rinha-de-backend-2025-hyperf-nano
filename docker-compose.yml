@@ -3,7 +3,7 @@ x-service-templates:
     build:
       context: .
       dockerfile: Dockerfile
-    image: marcosmarcolin/rinhadebackend2025:2.0.2
+    image: marcosmarcolin/rinhadebackend2025:2.1.0
     entrypoint: [ "php", "/opt/www/nano/public/index.php" ]
     depends_on:
       redis:
@@ -21,7 +21,7 @@ x-service-templates:
     build:
       context: .
       dockerfile: Dockerfile
-    image: marcosmarcolin/rinhadebackend2025:2.0.2
+    image: marcosmarcolin/rinhadebackend2025:2.1.0
     depends_on:
       redis:
         condition: service_healthy
@@ -48,12 +48,12 @@ services:
           cpus: "0.15"
           memory: "20M"
 
-  nginx:
-    image: nginx:latest
+  haproxy:
+    image: haproxy:latest
     ports:
       - "9999:9999"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
       - api01
       - api02
