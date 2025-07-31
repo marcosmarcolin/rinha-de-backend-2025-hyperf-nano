@@ -10,8 +10,6 @@
     }
   ],
   "require": {
-    "hyperf/nano": "^2.0",
-    "hyperf/redis": "^3.1",
     "ext-json": "*",
     "ext-redis": "*",
     "ext-swoole": "*"

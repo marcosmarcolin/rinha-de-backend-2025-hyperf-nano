@@ -1,35 +1,46 @@
-FROM hyperf/hyperf:8.3-alpine-v3.21-swoole
+FROM php:8.4-alpine
 
 ARG TIMEZONE=UTC
 
-ENV TIMEZONE=${TIMEZONE} \
-    APP_ENV=production \
-    SCAN_CACHEABLE=true
+ENV TIMEZONE=${TIMEZONE}
 
 RUN set -ex \
-    && cd /etc/php* \
-    && { \
-        echo "memory_limit=128M"; \
-        echo "upload_max_filesize=16M"; \
-        echo "post_max_size=16M"; \
-        echo "date.timezone=${TIMEZONE}"; \
-        echo "opcache.enable=1"; \
-        echo "opcache.enable_cli=1"; \
-        echo "opcache.memory_consumption=64"; \
-        echo "opcache.interned_strings_buffer=8"; \
-        echo "opcache.max_accelerated_files=5000"; \
-        echo "opcache.validate_timestamps=0"; \
-        echo "opcache.jit_buffer_size=32M"; \
-        echo "opcache.jit=tracing"; \
-        echo "opcache.fast_shutdown=1"; \
-        echo "zend.assertions=-1"; \
-        echo "realpath_cache_size=4096k"; \
-        echo "realpath_cache_ttl=600"; \
-    } | tee conf.d/99_overrides.ini \
-    && ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime \
+    && apk add --no-cache --virtual .build-deps \
+        autoconf gcc g++ make pkgconfig brotli-dev \
+    && apk add --no-cache \
+        git bash curl tzdata \
+        libstdc++ libcurl \
+        openssl \
+    \
+    && pecl install swoole \
+    && docker-php-ext-enable swoole \
+    \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    \
+    && cp /usr/share/zoneinfo/${TIMEZONE} /etc/localtime \
     && echo "${TIMEZONE}" > /etc/timezone \
-    && rm -rf /var/cache/apk/* /tmp/* /usr/share/man \
-    && echo -e "\033[42;37m Build Completed :).\033[0m\n"
+    \
+    && echo "memory_limit=128M" > /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "upload_max_filesize=16M" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "post_max_size=16M" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "date.timezone=${TIMEZONE}" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.enable_cli=1" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.memory_consumption=64" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.interned_strings_buffer=8" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.max_accelerated_files=5000" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.validate_timestamps=0" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.jit_buffer_size=32M" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.jit=tracing" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "opcache.fast_shutdown=1" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "zend.assertions=-1" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "realpath_cache_size=4096k" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "realpath_cache_ttl=600" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    \
+    && apk del .build-deps
+
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 WORKDIR /opt/www/nano
 

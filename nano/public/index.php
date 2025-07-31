@@ -1,69 +1,75 @@
 <?php
 
-declare(strict_types=1);
+use Swoole\Http\Server;
+use Swoole\Http\Request;
+use Swoole\Http\Response;
 
-use Hyperf\Nano\Factory\AppFactory;
-use Hyperf\HttpServer\Contract\RequestInterface;
-use Hyperf\HttpServer\Contract\ResponseInterface;
-use Hyperf\Redis\Redis;
-use Hyperf\Redis\RedisFactory;
+$redis = new Redis();
+$redis->connect('redis');
 
-require_once __DIR__ . '/../vendor/autoload.php';
+$server = new Server("0.0.0.0", 9501);
 
-$app = AppFactory::create();
-$app->config(require __DIR__ . '/../config/app.php');
-$container = $app->getContainer();
-
-$app->post('/payments', function () use ($container) {
-    $request = $container->get(RequestInterface::class);
-    $response = $container->get(ResponseInterface::class);
-
-    $body = $request->getParsedBody();
-    $correlationId = $body['correlationId'] ?? null;
-    $amount = $body['amount'] ?? null;
-
-    if (!$correlationId || !is_numeric($amount)) {
-        return $response->withStatus(400)->json(['error' => 'Invalid payload']);
-    }
-
-    $redis = $container->get(RedisFactory::class)->get('default');
-    $redis->lPush('payment_jobs', json_encode([
-        'correlationId' => $correlationId,
-        'amount' => (float)$amount
-    ]));
-
-    return $response->withStatus(200)->json(['message' => 'Accepted']);
+$server->on("start", function () {
+    echo "[Swoole] Servidor iniciado na porta 9501" . PHP_EOL;
 });
 
-$app->get('/purge-payments', function () use ($container) {
-    $response = $container->get(ResponseInterface::class);
-    $redis = $container->get(Redis::class);
-    $redis->flushAll();
-    return $response->withStatus(204);
-});
+$server->on("request", function (Request $request, Response $response) use ($redis) {
+    $path = $request->server['request_uri'] ?? '/';
+    $method = strtoupper($request->server['request_method'] ?? 'GET');
 
-$app->get('/payments-summary', function () use ($container) {
-    $request = $container->get(RequestInterface::class);
-    $response = $container->get(ResponseInterface::class);
-    $redis = $container->get(Redis::class);
-    $data = $request->all();
-    $from = toFloatTimestamp($data['from'] ?? null) ?? '-inf';
-    $to = toFloatTimestamp($data['to'] ?? null) ?? '+inf';
+    if ($method === 'POST' && $path === '/payments') {
+        $body = json_decode($request->rawContent() ?: '{}', true);
+        $correlationId = $body['correlationId'] ?? null;
+        $amount = $body['amount'] ?? null;
 
-    foreach (['default', 'fallback'] as $processor) {
-        $key = "payments:$processor";
-        $results = $redis->zRangeByScore($key, $from, $to) ?: [];
-        $totalAmountInCents = 0;
-        foreach ($results as $entry) {
-            $parts = explode(':', $entry);
-            $amountInCents = isset($parts[1]) ? (int)$parts[1] : (int)$parts[0];
-            $totalAmountInCents += $amountInCents;
+        if (!$correlationId || !is_numeric($amount)) {
+            $response->status(400);
+            return $response->end(json_encode(['error' => 'Invalid payload']));
         }
-        $summary[$processor]['totalRequests'] = count($results);
-        $summary[$processor]['totalAmount'] = round($totalAmountInCents / 100, 2);
+
+        $redis->lPush('payment_jobs', json_encode([
+            'correlationId' => $correlationId,
+            'amount' => (float)$amount
+        ]));
+
+        $response->header('Content-Type', 'application/json');
+        $response->status(200);
+        return $response->end(json_encode(['message' => 'Accepted']));
     }
 
-    return $response->withStatus(200)->json($summary);
+    if ($method === 'GET' && $path === '/purge-payments') {
+        $redis->flushAll();
+        $response->status(204);
+        return $response->end();
+    }
+
+    if ($method === 'GET' && $path === '/payments-summary') {
+        $from = toFloatTimestamp($request->get['from'] ?? null) ?? '-inf';
+        $to = toFloatTimestamp($request->get['to'] ?? null) ?? '+inf';
+        $summary = [];
+
+        foreach (['default', 'fallback'] as $processor) {
+            $key = "payments:$processor";
+            $results = $redis->zRangeByScore($key, $from, $to) ?: [];
+            $totalAmountInCents = 0;
+            foreach ($results as $entry) {
+                $parts = explode(':', $entry);
+                $amountInCents = isset($parts[1]) ? (int)$parts[1] : (int)$parts[0];
+                $totalAmountInCents += $amountInCents;
+            }
+            $summary[$processor] = [
+                'totalRequests' => count($results),
+                'totalAmount' => round($totalAmountInCents / 100, 2),
+            ];
+        }
+
+        $response->header('Content-Type', 'application/json');
+        return $response->end(json_encode($summary));
+    }
+
+    $response->status(404);
+    $response->header('Content-Type', 'application/json');
+    return $response->end(json_encode(['error' => 'Not found']));
 });
 
 function toFloatTimestamp(?string $dateString): ?float
@@ -78,4 +84,4 @@ function toFloatTimestamp(?string $dateString): ?float
     return $date ? (float)$date->format('U.u') : null;
 }
 
-$app->run();
+$server->start();
