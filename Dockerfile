@@ -40,14 +40,6 @@ RUN set -ex \
     \
     && apk del .build-deps
 
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-
 WORKDIR /opt/www/nano
-
-COPY nano/composer.json nano/composer.lock ./
-
-RUN composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction \
-    && composer clear-cache \
-    && rm -rf /root/.composer
 
 COPY nano/ ./
