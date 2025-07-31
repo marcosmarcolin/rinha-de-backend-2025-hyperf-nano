@@ -37,7 +37,7 @@ services:
       resources:
         limits:
           cpus: "0.2"
-          memory: "50M"
+          memory: "60M"
 
   worker-health:
     <<: *worker
@@ -46,7 +46,7 @@ services:
       resources:
         limits:
           cpus: "0.15"
-          memory: "40M"
+          memory: "30M"
 
   nginx:
     image: nginx:latest
@@ -69,7 +69,14 @@ services:
     image: redis:latest
     networks:
       - backend
-    command: [ "redis-server", "--save", "", "--appendonly", "no" ]
+    command:
+      [
+        "redis-server",
+        "--save", "",
+        "--appendonly", "no",
+        "--loglevel", "debug",
+        "--logfile", "/dev/null"
+      ]
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
