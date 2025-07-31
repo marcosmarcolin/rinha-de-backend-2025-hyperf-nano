@@ -8,8 +8,6 @@ use Swoole\Coroutine\Http\Client;
 use Swoole\Event;
 use Swoole\Runtime;
 
-require_once __DIR__ . '/../vendor/autoload.php';
-
 Runtime::enableCoroutine();
 
 $redis = new \Redis();

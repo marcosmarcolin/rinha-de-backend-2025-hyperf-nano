@@ -12,10 +12,13 @@
   "require": {
     "hyperf/nano": "^2.0",
     "hyperf/redis": "^3.1",
-    "swoole/ide-helper": "^6.0",
     "ext-json": "*",
-    "ext-redis": "*"
+    "ext-redis": "*",
+    "ext-swoole": "*"
   },
   "minimum-stability": "stable",
-  "license": "MIT"
+  "license": "MIT",
+  "require-dev": {
+    "swoole/ide-helper": "^6.0"
+  }
 }

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6a56a7ae92b82fe22101d0e563f5775c",
+    "content-hash": "4a361c1ed1b947674625dd18483b6910",
     "packages": [
         {
             "name": "doctrine/inflector",
@@ -3112,38 +3112,6 @@
             "time": "2024-09-11T13:17:53+00:00"
         },
         {
-            "name": "swoole/ide-helper",
-            "version": "6.0.2",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/swoole/ide-helper.git",
-                "reference": "6f12243dce071714c5febe059578d909698f9a52"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/swoole/ide-helper/zipball/6f12243dce071714c5febe059578d909698f9a52",
-                "reference": "6f12243dce071714c5febe059578d909698f9a52",
-                "shasum": ""
-            },
-            "type": "library",
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "Apache-2.0"
-            ],
-            "authors": [
-                {
-                    "name": "Team Swoole",
-                    "email": "team@swoole.com"
-                }
-            ],
-            "description": "IDE help files for Swoole.",
-            "support": {
-                "issues": "https://github.com/swoole/ide-helper/issues",
-                "source": "https://github.com/swoole/ide-helper/tree/6.0.2"
-            },
-            "time": "2025-03-23T07:31:41+00:00"
-        },
-        {
             "name": "swow/psr7-plus",
             "version": "v1.1.2",
             "source": {
@@ -4072,13 +4040,50 @@
             "time": "2025-04-30T23:37:27+00:00"
         }
     ],
-    "packages-dev": [],
+    "packages-dev": [
+        {
+            "name": "swoole/ide-helper",
+            "version": "6.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/swoole/ide-helper.git",
+                "reference": "6f12243dce071714c5febe059578d909698f9a52"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/swoole/ide-helper/zipball/6f12243dce071714c5febe059578d909698f9a52",
+                "reference": "6f12243dce071714c5febe059578d909698f9a52",
+                "shasum": ""
+            },
+            "type": "library",
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "Team Swoole",
+                    "email": "team@swoole.com"
+                }
+            ],
+            "description": "IDE help files for Swoole.",
+            "support": {
+                "issues": "https://github.com/swoole/ide-helper/issues",
+                "source": "https://github.com/swoole/ide-helper/tree/6.0.2"
+            },
+            "time": "2025-03-23T07:31:41+00:00"
+        }
+    ],
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": [],
+    "platform": {
+        "ext-json": "*",
+        "ext-redis": "*",
+        "ext-swoole": "*"
+    },
     "platform-dev": [],
     "plugin-api-version": "2.6.0"
 }

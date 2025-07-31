@@ -2,12 +2,9 @@
 
 declare(strict_types=1);
 
-use MarcosMarcolin\Rinha\HttpRequest as HttpRequestAlias;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Http\Client;
 use Swoole\Runtime;
-
-require_once __DIR__ . '/../vendor/autoload.php';
 
 Runtime::enableCoroutine();
 
