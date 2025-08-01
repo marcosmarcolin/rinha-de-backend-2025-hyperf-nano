@@ -1,6 +1,6 @@
 {
   "name": "marcosmarcolin/rinha-backend-2025",
-  "description": "Backend da Rinha de Backend 2025 utilizando Hyperf Nano e Swoole",
+  "description": "Backend da Rinha de Backend 2025 utilizando PHP 8.4 com Swoole, Redis e HAProxy.",
   "type": "project",
   "authors": [
     {

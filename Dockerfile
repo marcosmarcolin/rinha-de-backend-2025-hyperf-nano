@@ -40,6 +40,6 @@ RUN set -ex \
     \
     && apk del .build-deps
 
-WORKDIR /opt/www/nano
+WORKDIR /opt/www/app
 
-COPY nano/ ./
+COPY app/ ./
