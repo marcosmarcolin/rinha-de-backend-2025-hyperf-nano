@@ -10,23 +10,21 @@ use Swoole\Runtime;
 Runtime::enableCoroutine();
 
 $cpus = swoole_cpu_num();
-$defaultCoroutines = min(20, $cpus * 10);
-$fallbackCoroutines = min(16, $cpus * 10);
-$poolSize = intval(($defaultCoroutines + $fallbackCoroutines) * 1.1);
+$coroutines = min(24, $cpus * 10);
+$poolSize = (int)($coroutines * 1.1);
 $RedisPool = new Channel($poolSize);
 
-Coroutine::create(function () use ($poolSize, $RedisPool, $defaultCoroutines, $fallbackCoroutines) {
+Coroutine::create(function () use ($poolSize, $RedisPool, $coroutines) {
     for ($i = 0; $i < $poolSize; $i++) {
-        $Redis = new Redis();
-        $Redis->connect('redis');
-        $RedisPool->push($Redis);
+        $redis = new Redis();
+        $redis->connect('redis');
+        $RedisPool->push($redis);
     }
 
-    echo "[RedisPool] {$poolSize} conexões Redis disponíveis para Coroutines" . PHP_EOL;
+    echo "[RedisPool] $poolSize conexões Redis prontas" . PHP_EOL;
+    echo "[WorkerPayments] Iniciando com $coroutines Coroutines" . PHP_EOL;
 
-    echo "[WorkerDefault] Iniciando processamento com {$defaultCoroutines} Coroutines" . PHP_EOL;
-
-    for ($i = 0; $i < $defaultCoroutines; $i++) {
+    for ($i = 0; $i < $coroutines; $i++) {
         Coroutine::create(function () use ($RedisPool) {
             while (true) {
                 $redis = $RedisPool->pop();
@@ -34,7 +32,13 @@ Coroutine::create(function () use ($poolSize, $RedisPool, $defaultCoroutines, $f
                 try {
                     $data = $redis->brPop('payment_jobs', 1);
                     $payload = getPayload($data);
-                    if (!$payload || !is_object($payload) || empty($payload->correlationId) || empty($payload->amount)) {
+
+                    if (
+                        !$payload ||
+                        !is_object($payload) ||
+                        empty($payload->correlationId) ||
+                        empty($payload->amount)
+                    ) {
                         continue;
                     }
 
@@ -43,10 +47,7 @@ Coroutine::create(function () use ($poolSize, $RedisPool, $defaultCoroutines, $f
                     }
 
                     $processor = $redis->get('processor');
-                    if ($processor === 'fallback') {
-                        $redis->lPush('payment_jobs_fallback', json_encode($payload));
-                        continue;
-                    }
+                    $processor = is_string($processor) && $processor !== '' ? $processor : 'default';
 
                     $now = microtime(true);
                     $datetime = DateTime::createFromFormat('U.u', sprintf('%.6f', $now));
@@ -58,7 +59,7 @@ Coroutine::create(function () use ($poolSize, $RedisPool, $defaultCoroutines, $f
                         'requestedAt' => $requestedAt,
                     ];
 
-                    $success = pay('default', $body);
+                    $success = pay($processor, $body);
 
                     if (!$success) {
                         $payload = addRetry($payload);
@@ -69,56 +70,8 @@ Coroutine::create(function () use ($poolSize, $RedisPool, $defaultCoroutines, $f
                     }
 
                     $redis->setex($payload->correlationId, 86400, 1);
-                    $entry = "{$payload->correlationId}:" . ((int)round($payload->amount * 100));
-                    $redis->zAdd("payments:default", $now, $entry);
-                } finally {
-                    $RedisPool->push($redis);
-                }
-            }
-        });
-    }
-
-    echo "[WorkerFallback] Iniciando processamento com {$fallbackCoroutines} Coroutines" . PHP_EOL;
-
-    for ($i = 0; $i < $fallbackCoroutines; $i++) {
-        Coroutine::create(function () use ($RedisPool) {
-            while (true) {
-                $redis = $RedisPool->pop();
-
-                try {
-                    $data = $redis->brPop('payment_jobs_fallback', 1);
-                    $payload = getPayload($data);
-                    if (!$payload || !is_object($payload) || empty($payload->correlationId) || empty($payload->amount)) {
-                        continue;
-                    }
-
-                    if ($redis->exists($payload->correlationId)) {
-                        continue;
-                    }
-
-                    $now = microtime(true);
-                    $datetime = DateTime::createFromFormat('U.u', sprintf('%.6f', $now));
-                    $requestedAt = $datetime->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
-
-                    $body = [
-                        'correlationId' => $payload->correlationId,
-                        'amount' => $payload->amount,
-                        'requestedAt' => $requestedAt,
-                    ];
-
-                    $success = pay('fallback', $body);
-
-                    if (!$success) {
-                        $payload = addRetry($payload);
-                        if (($payload->retry ?? 0) < 2) {
-                            $redis->lPush('payment_jobs_fallback', json_encode($payload));
-                        }
-                        continue;
-                    }
-
-                    $redis->setex($payload->correlationId, 86400, 1);
-                    $entry = "{$payload->correlationId}:" . ((int)round($payload->amount * 100));
-                    $redis->zAdd("payments:fallback", $now, $entry);
+                    $entry = "$payload->correlationId:" . ((int)round($payload->amount * 100));
+                    $redis->zAdd("payments:$processor", $now, $entry);
                 } finally {
                     $RedisPool->push($redis);
                 }
@@ -130,10 +83,8 @@ Coroutine::create(function () use ($poolSize, $RedisPool, $defaultCoroutines, $f
 function pay(string $processor, array $data): bool
 {
     $client = new Client("payment-processor-{$processor}", 8080);
-    $client->setHeaders([
-        'Content-Type' => 'application/json',
-    ]);
-    $client->set(['timeout' => 2.5]);
+    $client->setHeaders(['Content-Type' => 'application/json']);
+    $client->set(['timeout' => 3]);
     $client->post('/payments', json_encode($data));
     $status = $client->getStatusCode();
     $client->close();
