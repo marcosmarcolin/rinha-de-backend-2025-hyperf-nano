@@ -18,9 +18,9 @@ $server->on("request", function (Request $request, Response $response) use ($red
     $method = strtoupper($request->server['request_method'] ?? 'GET');
 
     if ($method === 'POST' && $path === '/payments') {
-        $body = json_decode($request->rawContent() ?: '{}', true);
-        $correlationId = $body['correlationId'] ?? null;
-        $amount = $body['amount'] ?? null;
+        $body = json_decode($request->rawContent() ?: '{}', false);
+        $correlationId = $body->correlationId ?? null;
+        $amount = $body->amount ?? null;
 
         if (!$correlationId || !is_numeric($amount)) {
             $response->status(400);
