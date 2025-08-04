@@ -19,16 +19,10 @@ Coroutine::create(function () use ($coroutines) {
             $Redis = new Redis();
             $Redis->connect('redis');
             while (true) {
-                try {
-                    $data = $Redis->brPop('payment_jobs', 1);
-                    $payload = getPayload($data);
-
-                    if (
-                        !$payload ||
-                        !is_object($payload) ||
-                        empty($payload->correlationId) ||
-                        empty($payload->amount)
-                    ) {
+                $data = $Redis->brPop('payment_jobs', 1);
+                if ($data) {
+                    $payload = json_decode($data[1], false);
+                    if (json_last_error() !== JSON_ERROR_NONE) {
                         continue;
                     }
 
@@ -37,7 +31,7 @@ Coroutine::create(function () use ($coroutines) {
                     }
 
                     $processor = $Redis->get('processor');
-                    $processor = is_string($processor) && $processor !== '' ? $processor : 'default';
+                    $processor = in_array($processor, ['default', 'fallback'], true) ? $processor : 'default';
 
                     $now = microtime(true);
                     $datetime = DateTime::createFromFormat('U.u', sprintf('%.6f', $now));
@@ -60,10 +54,8 @@ Coroutine::create(function () use ($coroutines) {
                     }
 
                     $Redis->setex($payload->correlationId, 86400, 1);
-                    $entry = "$payload->correlationId:" . ((int)round($payload->amount * 100));
-                    $Redis->zAdd("payments:$processor", $now, $entry);
-                } finally {
-                    // TODO
+                    $entry = $payload->correlationId . ':' . ((int)round($payload->amount * 100));
+                    $Redis->zAdd("payments:" . $processor, $now, $entry);
                 }
             }
         });
@@ -80,11 +72,6 @@ function pay(string $processor, array $data): bool
     $client->close();
 
     return $status >= 200 && $status < 300;
-}
-
-function getPayload(?array $data): ?object
-{
-    return isset($data[1]) ? json_decode($data[1], false) : null;
 }
 
 function addRetry(object $payload): object

@@ -10,12 +10,23 @@ use Swoole\Runtime;
 
 Runtime::enableCoroutine();
 
-$redis = new \Redis();
-$redis->connect('redis');
+$Redis = new \Redis();
+$Redis->connect('redis');
 
 echo "[WorkerHealth] Iniciando monitoramento..." . PHP_EOL;
 
-Coroutine::create(function () use ($redis) {
+Coroutine::create(function () use ($Redis) {
+    while (true) {
+        if ($Redis->get('processor') === 'fallback' && checkPaymentsEndpointIsUp()) {
+            $Redis->setex('processor', 15, 'default');
+            echo "[WorkerHealth] Reabilitado processador default" . PHP_EOL;
+        }
+
+        Coroutine::sleep(0.8);
+    }
+});
+
+Coroutine::create(function () use ($Redis) {
     while (true) {
         $channel = new Channel(2);
 
@@ -34,8 +45,8 @@ Coroutine::create(function () use ($redis) {
         $best = chooseProcessor($results);
 
         if ($best) {
-            echo "[WorkerHealth] processador atual: " . $best . PHP_EOL;
-            $redis->setex('processor', 7, $best);
+            $Redis->setex('processor', 15, $best);
+            echo "[WorkerHealth] Processador atual: " . $best . PHP_EOL;
         }
 
         Coroutine::sleep(5);
@@ -62,6 +73,17 @@ function checkProcessorHealth(string $host): ?array
     }
 
     return null;
+}
+
+function checkPaymentsEndpointIsUp(): bool
+{
+    $client = new Client("payment-processor-default", 8080);
+    $client->set(['timeout' => 0.3, 'keep_alive' => false]);
+    $client->post('/payments', '{}');
+    $status = $client->getStatusCode();
+    $client->close();
+
+    return $status >= 200 && $status < 500;
 }
 
 function chooseProcessor(array $hosts): ?string
