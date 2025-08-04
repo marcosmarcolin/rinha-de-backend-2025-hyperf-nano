@@ -34,6 +34,7 @@ Coroutine::create(function () use ($redis) {
         $best = chooseProcessor($results);
 
         if ($best) {
+            echo "[WorkerHealth] processador atual: " . $best . PHP_EOL;
             $redis->setex('processor', 7, $best);
         }
 

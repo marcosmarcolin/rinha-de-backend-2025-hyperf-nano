@@ -3,34 +3,24 @@
 declare(strict_types=1);
 
 use Swoole\Coroutine;
-use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\Http\Client;
 use Swoole\Runtime;
 
 Runtime::enableCoroutine();
 
 $cpus = swoole_cpu_num();
-$coroutines = min(24, $cpus * 10);
-$poolSize = (int)($coroutines * 1.1);
-$RedisPool = new Channel($poolSize);
+$coroutines = min(20, $cpus * 10);
 
-Coroutine::create(function () use ($poolSize, $RedisPool, $coroutines) {
-    for ($i = 0; $i < $poolSize; $i++) {
-        $redis = new Redis();
-        $redis->connect('redis');
-        $RedisPool->push($redis);
-    }
-
-    echo "[RedisPool] $poolSize conexões Redis prontas" . PHP_EOL;
+Coroutine::create(function () use ($coroutines) {
     echo "[WorkerPayments] Iniciando com $coroutines Coroutines" . PHP_EOL;
 
     for ($i = 0; $i < $coroutines; $i++) {
-        Coroutine::create(function () use ($RedisPool) {
+        Coroutine::create(function () {
+            $Redis = new Redis();
+            $Redis->connect('redis');
             while (true) {
-                $redis = $RedisPool->pop();
-
                 try {
-                    $data = $redis->brPop('payment_jobs', 1);
+                    $data = $Redis->brPop('payment_jobs', 1);
                     $payload = getPayload($data);
 
                     if (
@@ -42,11 +32,11 @@ Coroutine::create(function () use ($poolSize, $RedisPool, $coroutines) {
                         continue;
                     }
 
-                    if ($redis->exists($payload->correlationId)) {
+                    if ($Redis->exists($payload->correlationId)) {
                         continue;
                     }
 
-                    $processor = $redis->get('processor');
+                    $processor = $Redis->get('processor');
                     $processor = is_string($processor) && $processor !== '' ? $processor : 'default';
 
                     $now = microtime(true);
@@ -64,16 +54,16 @@ Coroutine::create(function () use ($poolSize, $RedisPool, $coroutines) {
                     if (!$success) {
                         $payload = addRetry($payload);
                         if (($payload->retry ?? 0) < 2) {
-                            $redis->lPush('payment_jobs', json_encode($payload));
+                            $Redis->lPush('payment_jobs', json_encode($payload));
                         }
                         continue;
                     }
 
-                    $redis->setex($payload->correlationId, 86400, 1);
+                    $Redis->setex($payload->correlationId, 86400, 1);
                     $entry = "$payload->correlationId:" . ((int)round($payload->amount * 100));
-                    $redis->zAdd("payments:$processor", $now, $entry);
+                    $Redis->zAdd("payments:$processor", $now, $entry);
                 } finally {
-                    $RedisPool->push($redis);
+                    // TODO
                 }
             }
         });
