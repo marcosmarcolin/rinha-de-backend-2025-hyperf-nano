@@ -15,7 +15,7 @@ x-service-templates:
       resources:
         limits:
           cpus: "0.35"
-          memory: "100M"
+          memory: "80M"
 
   worker-template: &worker
     build:
@@ -30,14 +30,23 @@ x-service-templates:
       - payment-processor
 
 services:
-  worker-payments:
+  worker-payments-default:
     <<: *worker
     entrypoint: [ "php", "/opt/www/app/workers/payments.php" ]
     deploy:
       resources:
         limits:
-          cpus: "0.2"
-          memory: "50M"
+          cpus: "0.1"
+          memory: "45M"
+
+  worker-payments-fallback:
+    <<: *worker
+    entrypoint: [ "php", "/opt/www/app/workers/payments_fallback.php" ]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: "45M"
 
   worker-health:
     <<: *worker

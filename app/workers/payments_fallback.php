@@ -28,20 +28,6 @@ function startQueueWorker(string $queue, string $processor, int $coroutines): vo
                     continue;
                 }
 
-                $health = (int)$Redis->get('processor') ?: 1;
-
-                if ($health === 2) {
-                    $Redis->lPush('payment_jobs_fallback', json_encode($payload));
-                    Coroutine::sleep(0.01);
-                    continue;
-                }
-
-                if ($health === 0) {
-                    $Redis->lPush($queue, json_encode($payload));
-                    Coroutine::sleep(0.01);
-                    continue;
-                }
-
                 $now = microtime(true);
                 $requestedAt = DateTime::createFromFormat('U.u', sprintf('%.6f', $now))
                     ->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
@@ -88,8 +74,8 @@ function addRetry(object $payload): object
 }
 
 $cpus = swoole_cpu_num();
-$coroutines = min(20, $cpus * 10);
+$coroutines = min(10, $cpus * 8);
 
-Coroutine::create(fn() => startQueueWorker('payment_jobs', 'default', $coroutines));
+Coroutine::create(fn() => startQueueWorker('payment_jobs_fallback', 'fallback', $coroutines));
 
 Swoole\Event::wait();

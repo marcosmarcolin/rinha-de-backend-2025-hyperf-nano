@@ -27,9 +27,18 @@ $server->on("request", function (Request $request, Response $response) use ($red
             return $response->end(json_encode(['error' => 'Invalid payload']));
         }
 
-        $redis->lPush('payment_jobs', json_encode([
+        static $cachedQueue = null;
+        static $lastCheck = 0;
+
+        if (time() - $lastCheck >= 2 || $cachedQueue === null) {
+            $processor = (int)($redis->get('processor') ?: 1);
+            $cachedQueue = $processor === 2 ? 'payment_jobs_fallback' : 'payment_jobs';
+            $lastCheck = time();
+        }
+
+        $redis->lPush($cachedQueue, json_encode([
             'correlationId' => $correlationId,
-            'amount' => (float)$amount
+            'amount' => (float)$amount,
         ]));
 
         $response->header('Content-Type', 'application/json');
