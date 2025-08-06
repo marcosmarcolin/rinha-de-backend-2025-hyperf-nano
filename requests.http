@@ -1,0 +1,7 @@
+### Purge payments
+
+GET http://localhost:9999/purge-payments
+
+### Get payments summary
+
+GET http://localhost:9999/payments-summary

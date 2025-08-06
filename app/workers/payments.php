@@ -17,6 +17,9 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
             $redis = new Redis();
             $redis->connect('redis');
 
+            $client = new Client('payment-processor-' . $processor, 8080);
+            $client->setHeaders(['Content-Type' => 'application/json']);
+
             while (true) {
                 $data = $redis->brPop($queue, 1);
                 if (!$data) {
@@ -24,31 +27,37 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
                 }
 
                 $payload = json_decode($data[1]);
-
                 $health = (int)($redis->get('processor') ?? 1);
 
                 if ($shouldFallback && $health === 2) {
-                    $redis->lPush('payment_jobs_fallback', json_encode($payload));
-                    Coroutine::sleep(0.01);
+                    $redis->lPush('payment_jobs_fallback', $data[1]);
+                    Coroutine::sleep(0.02);
                     continue;
                 }
 
                 if ($health === 0) {
-                    $redis->lPush($queue, json_encode($payload));
-                    Coroutine::sleep(0.01);
+                    $redis->lPush(mt_rand(0, 1) === 0 ? 'payment_jobs' : 'payment_jobs_fallback', $data[1]);
+                    Coroutine::sleep(0.02);
                     continue;
                 }
 
-                $now = microtime(true);
-                $requestedAt = DateTime::createFromFormat('U.u', sprintf('%.6f', $now))
-                    ->setTimezone(new DateTimeZone('UTC'))
-                    ->format('Y-m-d\TH:i:s.v\Z');
+                $payload->requestedAt = gmdate(
+                        'Y-m-d\TH:i:s.',
+                        (int)$now = microtime(true)) . sprintf('%03d',
+                        ($now - floor($now)) * 1000
+                    ) . 'Z';;
 
-                $status = sendPayment($processor, [
-                    'correlationId' => $payload->correlationId,
-                    'amount' => $payload->amount,
-                    'requestedAt' => $requestedAt,
-                ]);
+                $client->post('/payments', json_encode($payload));
+                $status = $client->getStatusCode();
+
+                if ($status === 200) {
+                    $redis->zAdd(
+                        'payments:' . $processor,
+                        $now,
+                        $payload->correlationId . ':' . ((int)round($payload->amount * 100))
+                    );
+                    continue;
+                }
 
                 if ($status === 422) {
                     echo "[Worker:$processor] Pagamento duplicado" . PHP_EOL;
@@ -60,25 +69,10 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
                     if ($payload->retry < 2) {
                         $redis->lPush($queue, json_encode($payload));
                     }
-                    continue;
                 }
-
-                $entry = $payload->correlationId . ':' . ((int)round($payload->amount * 100));
-                $redis->zAdd('payments:' . $processor, $now, $entry);
             }
         });
     }
-}
-
-function sendPayment(string $processor, array $data): int
-{
-    $client = new Client('payment-processor-' . $processor, 8080);
-    $client->setHeaders(['Content-Type' => 'application/json']);
-    $client->post('/payments', json_encode($data));
-    $status = $client->getStatusCode();
-    $client->close();
-
-    return $status;
 }
 
 $cpus = swoole_cpu_num();

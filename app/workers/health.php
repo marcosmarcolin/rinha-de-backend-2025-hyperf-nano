@@ -34,7 +34,7 @@ Coroutine::create(function () use ($Redis) {
         $best = chooseProcessor($results);
 
         $Redis->setex('processor', 7, $best);
-        echo "[WorkerHealth] Processador atual: " . match ($best) {
+        echo "[WorkerHealth] [" . date('Y-m-d H:i:s') . "] Processador atual: " . match ($best) {
                 1 => 'default',
                 2 => 'fallback',
                 0 => 'off',
@@ -72,14 +72,48 @@ function chooseProcessor(array $hosts): int
     $default = $hosts['default'] ?? null;
     $fallback = $hosts['fallback'] ?? null;
 
-    if (is_array($default) && ($default['failing'] ?? true) === false) {
+    $defaultHealthy = is_array($default) && ($default['failing'] ?? true) === false;
+    $fallbackHealthy = is_array($fallback) && ($fallback['failing'] ?? true) === false;
+
+    if ($defaultHealthy && $fallbackHealthy) {
+        $defaultTime = (int)($default['minResponseTime'] ?? PHP_INT_MAX);
+        $fallbackTime = (int)($fallback['minResponseTime'] ?? PHP_INT_MAX);
+
+        return $defaultTime <= $fallbackTime ? 1 : 2;
+    }
+
+    if ($defaultHealthy) {
         return 1;
     }
-    if (is_array($fallback) && ($fallback['failing'] ?? true) === false) {
+    if ($fallbackHealthy) {
         return 2;
     }
 
     return 0;
+}
+
+Coroutine::create(function () use ($Redis) {
+    while (true) {
+        if ((int)($Redis->get('processor') ?? 0) === 0) {
+            if (checkAlive('payment-processor-default')) {
+                $Redis->setex('processor', 7, 1);
+                echo "[WorkerHealth] [" . date('Y-m-d H:i:s') . "] Default voltou!" . PHP_EOL;
+            }
+        }
+        Coroutine::sleep(2);
+    }
+});
+
+function checkAlive(string $host): bool
+{
+    $client = new Client($host, 8080);
+    $client->set(['timeout' => 1.5]);
+    $client->setHeaders(['Content-Type' => 'application/json']);
+    $client->post('/payments', '{}');
+    $status = $client->getStatusCode();
+    $client->close();
+
+    return $status >= 200 && $status < 300;
 }
 
 Event::wait();
