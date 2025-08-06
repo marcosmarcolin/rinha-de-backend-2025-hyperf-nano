@@ -13,11 +13,11 @@ A solução é baseada em:
 
 | Serviço         | CPU      | Memória (MB) |
 |-----------------|----------|--------------|
-| api01           | 0.35     | 100          |
-| api02           | 0.35     | 100          |
-| worker-payments | 0.30     | 50           |
+| api01           | 0.35     | 90           |
+| api02           | 0.35     | 90           |
+| worker-payments | 0.20     | 70           |
 | worker-health   | 0.15     | 20           |
-| haproxy         | 0.20     | 50           |
+| haproxy         | 0.30     | 50           |
 | redis           | 0.15     | 30           |
 | **Total**       | **1.50** | **350**      |
 

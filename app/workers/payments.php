@@ -8,88 +8,81 @@ use Swoole\Runtime;
 
 Runtime::enableCoroutine();
 
-function startQueueWorker(string $queue, string $processor, int $coroutines): void
+function startWorker(string $queue, string $processor, int $coroutines, bool $shouldFallback): void
 {
-    echo "[Worker:$processor] Iniciando com $coroutines coroutines na fila '$queue'" . PHP_EOL;
+    echo "[Worker:$processor] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
 
     for ($i = 0; $i < $coroutines; $i++) {
-        Coroutine::create(function () use ($queue, $processor) {
-            $Redis = new Redis();
-            $Redis->connect('redis');
+        Coroutine::create(function () use ($queue, $processor, $shouldFallback) {
+            $redis = new Redis();
+            $redis->connect('redis');
 
             while (true) {
-                $data = $Redis->brPop($queue, 1);
+                $data = $redis->brPop($queue, 1);
                 if (!$data) {
                     continue;
                 }
 
-                $payload = json_decode($data[1], false);
-                if (json_last_error() !== JSON_ERROR_NONE || $Redis->exists($payload->correlationId)) {
-                    continue;
-                }
+                $payload = json_decode($data[1]);
 
-                $health = (int)$Redis->get('processor') ?: 1;
+                $health = (int)($redis->get('processor') ?? 1);
 
-                if ($health === 2) {
-                    $Redis->lPush('payment_jobs_fallback', json_encode($payload));
+                if ($shouldFallback && $health === 2) {
+                    $redis->lPush('payment_jobs_fallback', json_encode($payload));
                     Coroutine::sleep(0.01);
                     continue;
                 }
 
                 if ($health === 0) {
-                    $Redis->lPush($queue, json_encode($payload));
+                    $redis->lPush($queue, json_encode($payload));
                     Coroutine::sleep(0.01);
                     continue;
                 }
 
                 $now = microtime(true);
                 $requestedAt = DateTime::createFromFormat('U.u', sprintf('%.6f', $now))
-                    ->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
+                    ->setTimezone(new DateTimeZone('UTC'))
+                    ->format('Y-m-d\TH:i:s.v\Z');
 
-                $success = pay($processor, [
+                $status = sendPayment($processor, [
                     'correlationId' => $payload->correlationId,
                     'amount' => $payload->amount,
                     'requestedAt' => $requestedAt,
                 ]);
 
-                if (!$success) {
-                    $payload = addRetry($payload);
-                    if (($payload->retry ?? 0) < 2) {
-                        $Redis->lPush($queue, json_encode($payload));
-                        Coroutine::sleep(0.01);
+                if ($status === 422) {
+                    echo "[Worker:$processor] Pagamento duplicado" . PHP_EOL;
+                    continue;
+                }
+
+                if ($status < 200 || $status >= 300) {
+                    $payload->retry = ($payload->retry ?? 0) + 1;
+                    if ($payload->retry < 2) {
+                        $redis->lPush($queue, json_encode($payload));
                     }
                     continue;
                 }
 
-                $Redis->setex($payload->correlationId, 86400, 1);
                 $entry = $payload->correlationId . ':' . ((int)round($payload->amount * 100));
-                $Redis->zAdd("payments:$processor", $now, $entry);
+                $redis->zAdd('payments:' . $processor, $now, $entry);
             }
         });
     }
 }
 
-function pay(string $processor, array $data): bool
+function sendPayment(string $processor, array $data): int
 {
-    $client = new Client("payment-processor-$processor", 8080);
+    $client = new Client('payment-processor-' . $processor, 8080);
     $client->setHeaders(['Content-Type' => 'application/json']);
-    $client->set(['timeout' => 3]);
     $client->post('/payments', json_encode($data));
     $status = $client->getStatusCode();
     $client->close();
 
-    return $status >= 200 && $status < 300;
-}
-
-function addRetry(object $payload): object
-{
-    $payload->retry = ($payload->retry ?? 0) + 1;
-    return $payload;
+    return $status;
 }
 
 $cpus = swoole_cpu_num();
-$coroutines = min(20, $cpus * 10);
-
-Coroutine::create(fn() => startQueueWorker('payment_jobs', 'default', $coroutines));
+startWorker('payment_jobs', 'default', min(20, $cpus * 10), true);
+startWorker('payment_jobs_fallback', 'fallback', min(16, $cpus * 10), false);
 
 Swoole\Event::wait();

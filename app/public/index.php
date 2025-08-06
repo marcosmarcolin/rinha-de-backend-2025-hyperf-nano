@@ -15,35 +15,22 @@ $server->on("start", function () {
 
 $server->on("request", function (Request $request, Response $response) use ($redis) {
     $path = $request->server['request_uri'] ?? '/';
-    $method = strtoupper($request->server['request_method'] ?? 'GET');
+    $method = $request->server['request_method'] ?? 'GET';
 
     if ($method === 'POST' && $path === '/payments') {
         $body = json_decode($request->rawContent() ?: '{}', false);
-        $correlationId = $body->correlationId ?? null;
-        $amount = $body->amount ?? null;
 
-        if (!$correlationId || !is_numeric($amount)) {
+        if (json_last_error() !== JSON_ERROR_NONE || !is_numeric($body->amount)) {
             $response->status(400);
-            return $response->end(json_encode(['error' => 'Invalid payload']));
+            return $response->end('{"error":"Invalid payload"}');
         }
 
-        static $cachedQueue = null;
-        static $lastCheck = 0;
-
-        if (time() - $lastCheck >= 2 || $cachedQueue === null) {
-            $processor = (int)($redis->get('processor') ?: 1);
-            $cachedQueue = $processor === 2 ? 'payment_jobs_fallback' : 'payment_jobs';
-            $lastCheck = time();
-        }
-
-        $redis->lPush($cachedQueue, json_encode([
-            'correlationId' => $correlationId,
-            'amount' => (float)$amount,
+        $redis->lPush('payment_jobs', json_encode([
+            'correlationId' => $body->correlationId,
+            'amount' => (float)$body->amount,
         ]));
 
-        $response->header('Content-Type', 'application/json');
-        $response->status(200);
-        return $response->end(json_encode(['message' => 'Accepted']));
+        return $response->end();
     }
 
     if ($method === 'GET' && $path === '/purge-payments') {

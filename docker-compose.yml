@@ -3,7 +3,7 @@ x-service-templates:
     build:
       context: .
       dockerfile: Dockerfile
-    image: marcosmarcolin/rinhadebackend2025:2.4.0
+    image: marcosmarcolin/rinhadebackend2025:2.5.0
     entrypoint: [ "php", "/opt/www/app/public/index.php" ]
     depends_on:
       redis:
@@ -15,13 +15,13 @@ x-service-templates:
       resources:
         limits:
           cpus: "0.35"
-          memory: "80M"
+          memory: "90M"
 
   worker-template: &worker
     build:
       context: .
       dockerfile: Dockerfile
-    image: marcosmarcolin/rinhadebackend2025:2.4.0
+    image: marcosmarcolin/rinhadebackend2025:2.5.0
     depends_on:
       redis:
         condition: service_healthy
@@ -36,17 +36,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.1"
-          memory: "45M"
-
-  worker-payments-fallback:
-    <<: *worker
-    entrypoint: [ "php", "/opt/www/app/workers/payments_fallback.php" ]
-    deploy:
-      resources:
-        limits:
-          cpus: "0.1"
-          memory: "45M"
+          cpus: "0.2"
+          memory: "70M"
 
   worker-health:
     <<: *worker
