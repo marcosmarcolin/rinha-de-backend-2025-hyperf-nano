@@ -36,7 +36,7 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
                 }
 
                 if ($health === 0) {
-                    $redis->lPush(mt_rand(0, 1) === 0 ? 'payment_jobs' : 'payment_jobs_fallback', $data[1]);
+                    $redis->lPush('payment_jobs', $data[1]);
                     Coroutine::sleep(0.02);
                     continue;
                 }
@@ -45,7 +45,7 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
                         'Y-m-d\TH:i:s.',
                         (int)$now = microtime(true)) . sprintf('%03d',
                         ($now - floor($now)) * 1000
-                    ) . 'Z';;
+                    ) . 'Z';
 
                 $client->post('/payments', json_encode($payload));
                 $status = $client->getStatusCode();
