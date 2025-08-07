@@ -76,7 +76,7 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
 }
 
 $cpus = swoole_cpu_num();
-startWorker('payment_jobs', 'default', min(20, $cpus * 10), true);
-startWorker('payment_jobs_fallback', 'fallback', min(16, $cpus * 10), false);
+startWorker('payment_jobs', 'default', min(14, $cpus * 10), true);
+startWorker('payment_jobs_fallback', 'fallback', min(10, $cpus * 10), false);
 
 Swoole\Event::wait();
