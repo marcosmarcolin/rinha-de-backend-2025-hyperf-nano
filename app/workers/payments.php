@@ -31,13 +31,13 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
 
                 if ($shouldFallback && $health === 2) {
                     $redis->lPush('payment_jobs_fallback', $data[1]);
-                    Coroutine::sleep(0.5);
+                    Coroutine::sleep(0.3);
                     continue;
                 }
 
                 if ($health === 0) {
                     $redis->lPush('payment_jobs', $data[1]);
-                    Coroutine::sleep(0.5);
+                    Coroutine::sleep(0.3);
                     continue;
                 }
 
@@ -75,7 +75,7 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
     }
 }
 
-startWorker('payment_jobs', 'default', 10, true);
-startWorker('payment_jobs_fallback', 'fallback', 10, false);
+startWorker('payment_jobs', 'default', 6, true);
+startWorker('payment_jobs_fallback', 'fallback', 6, false);
 
 Swoole\Event::wait();

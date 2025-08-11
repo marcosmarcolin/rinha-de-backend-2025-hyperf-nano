@@ -48,7 +48,7 @@ Coroutine::create(function () use ($Redis) {
 function checkProcessorHealth(string $host): ?array
 {
     $client = new Client($host, 8080);
-    $client->set(['timeout' => 2.5]);
+    $client->set(['timeout' => 1]);
     $client->setHeaders([
         'Host' => $host,
         'Accept' => 'application/json',
@@ -90,30 +90,6 @@ function chooseProcessor(array $hosts): int
     }
 
     return 0;
-}
-
-Coroutine::create(function () use ($Redis) {
-    while (true) {
-        if ((int)($Redis->get('processor') ?? 0) === 0) {
-            if (checkAlive('payment-processor-default')) {
-                $Redis->setex('processor', 7, 1);
-                echo "[WorkerHealth] [" . date('Y-m-d H:i:s') . "] Default voltou!" . PHP_EOL;
-            }
-        }
-        Coroutine::sleep(2);
-    }
-});
-
-function checkAlive(string $host): bool
-{
-    $client = new Client($host, 8080);
-    $client->set(['timeout' => 1.5]);
-    $client->setHeaders(['Content-Type' => 'application/json']);
-    $client->post('/payments', '{}');
-    $status = $client->getStatusCode();
-    $client->close();
-
-    return $status >= 200 && $status < 300;
 }
 
 Event::wait();

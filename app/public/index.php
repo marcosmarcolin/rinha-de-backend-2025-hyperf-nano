@@ -22,7 +22,7 @@ $server->on("request", function (Request $request, Response $response) use ($red
 
         if (json_last_error() !== JSON_ERROR_NONE || !is_numeric($body->amount)) {
             $response->status(400);
-            return $response->end('{"error":"Invalid payload"}');
+            return $response->end();
         }
 
         $redis->lPush('payment_jobs', json_encode([
@@ -65,7 +65,7 @@ $server->on("request", function (Request $request, Response $response) use ($red
 
     $response->status(404);
     $response->header('Content-Type', 'application/json');
-    return $response->end(json_encode(['error' => 'Not found']));
+    return $response->end();
 });
 
 function toFloatTimestamp(?string $dateString): ?float
