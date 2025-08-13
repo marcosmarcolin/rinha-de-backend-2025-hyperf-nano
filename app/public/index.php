@@ -10,7 +10,7 @@ $redis->connect('redis');
 $server = new Server("0.0.0.0", 9501);
 
 $server->on("start", function () {
-    echo "[Swoole] Servidor iniciado na porta 9501" . PHP_EOL;
+    echo "[Swoole] Server started on port 9501" . PHP_EOL;
 });
 
 $server->on("request", function (Request $request, Response $response) use ($redis) {
@@ -18,19 +18,12 @@ $server->on("request", function (Request $request, Response $response) use ($red
     $method = $request->server['request_method'] ?? 'GET';
 
     if ($method === 'POST' && $path === '/payments') {
+        $response->end();
         $body = json_decode($request->rawContent() ?: '{}', false);
-
-        if (json_last_error() !== JSON_ERROR_NONE || !is_numeric($body->amount)) {
-            $response->status(400);
-            return $response->end();
-        }
-
         $redis->lPush('payment_jobs', json_encode([
             'correlationId' => $body->correlationId,
-            'amount' => (float)$body->amount,
+            'amount' => $body->amount
         ]));
-
-        return $response->end();
     }
 
     if ($method === 'GET' && $path === '/purge-payments') {

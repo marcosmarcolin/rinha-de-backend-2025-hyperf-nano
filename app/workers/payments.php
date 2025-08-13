@@ -10,7 +10,7 @@ Runtime::enableCoroutine();
 
 function startWorker(string $queue, string $processor, int $coroutines, bool $shouldFallback): void
 {
-    echo "[Worker:$processor] Iniciando processamento com {$coroutines} Coroutines" . PHP_EOL;
+    echo "[Worker:$processor] Starting processing with {$coroutines} Coroutines" . PHP_EOL;
 
     for ($i = 0; $i < $coroutines; $i++) {
         Coroutine::create(function () use ($queue, $processor, $shouldFallback) {
@@ -31,13 +31,13 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
 
                 if ($shouldFallback && $health === 2) {
                     $redis->lPush('payment_jobs_fallback', $data[1]);
-                    Coroutine::sleep(0.3);
+                    Coroutine::sleep(0.1);
                     continue;
                 }
 
                 if ($health === 0) {
                     $redis->lPush('payment_jobs', $data[1]);
-                    Coroutine::sleep(0.3);
+                    Coroutine::sleep(0.1);
                     continue;
                 }
 
@@ -60,7 +60,6 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
                 }
 
                 if ($status === 422) {
-                    echo "[Worker:$processor] Pagamento duplicado" . PHP_EOL;
                     continue;
                 }
 
@@ -75,7 +74,7 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
     }
 }
 
-startWorker('payment_jobs', 'default', 6, true);
-startWorker('payment_jobs_fallback', 'fallback', 6, false);
+startWorker('payment_jobs', 'default', 15, true);
+startWorker('payment_jobs_fallback', 'fallback', 5, false);
 
 Swoole\Event::wait();

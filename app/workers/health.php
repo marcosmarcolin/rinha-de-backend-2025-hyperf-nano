@@ -13,7 +13,7 @@ Runtime::enableCoroutine();
 $Redis = new \Redis();
 $Redis->connect('redis');
 
-echo "[WorkerHealth] Iniciando monitoramento..." . PHP_EOL;
+echo "[WorkerHealth] Starting monitoring..." . PHP_EOL;
 
 Coroutine::create(function () use ($Redis) {
     while (true) {
@@ -34,11 +34,11 @@ Coroutine::create(function () use ($Redis) {
         $best = chooseProcessor($results);
 
         $Redis->setex('processor', 7, $best);
-        echo "[WorkerHealth] [" . date('Y-m-d H:i:s') . "] Processador atual: " . match ($best) {
+        echo "[WorkerHealth] [" . date('Y-m-d H:i:s') . "] Current processor: " . match ($best) {
                 1 => 'default',
                 2 => 'fallback',
                 0 => 'off',
-                default => 'desconhecido',
+                default => 'unknown',
             } . PHP_EOL;
 
         Coroutine::sleep(5);
