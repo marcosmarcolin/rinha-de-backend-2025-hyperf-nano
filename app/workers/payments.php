@@ -31,13 +31,7 @@ function startWorker(string $queue, string $processor, int $coroutines, bool $sh
 
                 if ($shouldFallback && $health === 2) {
                     $redis->lPush('payment_jobs_fallback', $data[1]);
-                    Coroutine::sleep(0.1);
-                    continue;
-                }
-
-                if ($health === 0) {
-                    $redis->lPush('payment_jobs', $data[1]);
-                    Coroutine::sleep(0.1);
+                    Coroutine::sleep(0.3);
                     continue;
                 }
 

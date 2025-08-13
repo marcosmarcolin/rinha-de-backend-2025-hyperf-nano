@@ -37,8 +37,6 @@ Coroutine::create(function () use ($Redis) {
         echo "[WorkerHealth] [" . date('Y-m-d H:i:s') . "] Current processor: " . match ($best) {
                 1 => 'default',
                 2 => 'fallback',
-                0 => 'off',
-                default => 'unknown',
             } . PHP_EOL;
 
         Coroutine::sleep(5);
@@ -89,7 +87,7 @@ function chooseProcessor(array $hosts): int
         return 2;
     }
 
-    return 0;
+    return 1;
 }
 
 Event::wait();
