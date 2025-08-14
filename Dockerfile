@@ -35,6 +35,7 @@ RUN set -ex \
     && echo "opcache.jit=tracing" >> /usr/local/etc/php/conf.d/99-overrides.ini \
     && echo "opcache.fast_shutdown=1" >> /usr/local/etc/php/conf.d/99-overrides.ini \
     && echo "zend.assertions=-1" >> /usr/local/etc/php/conf.d/99-overrides.ini \
+    && echo "zend.enable_gc=0" >> /usr/local/etc/php/conf.d/99-overrides.ini \
     && echo "realpath_cache_size=4096k" >> /usr/local/etc/php/conf.d/99-overrides.ini \
     && echo "realpath_cache_ttl=600" >> /usr/local/etc/php/conf.d/99-overrides.ini \
     \

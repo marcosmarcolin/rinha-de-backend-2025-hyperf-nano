@@ -33,11 +33,8 @@ Coroutine::create(function () use ($Redis) {
         $channel->close();
         $best = chooseProcessor($results);
 
-        $Redis->setex('processor', 7, $best);
-        echo "[WorkerHealth] [" . date('Y-m-d H:i:s') . "] Current processor: " . match ($best) {
-                1 => 'default',
-                2 => 'fallback',
-            } . PHP_EOL;
+        $Redis->setex('processor', 8, $best);
+        echo "[WorkerHealth] [" . date('Y-m-d H:i:s') . "] Current processor: " . ($best === 1 ? 'default' : 'fallback') . PHP_EOL;
 
         Coroutine::sleep(5);
     }
@@ -46,22 +43,20 @@ Coroutine::create(function () use ($Redis) {
 function checkProcessorHealth(string $host): ?array
 {
     $client = new Client($host, 8080);
-    $client->set(['timeout' => 1]);
-    $client->setHeaders([
-        'Host' => $host,
-        'Accept' => 'application/json',
-    ]);
-
-    $client->get('/payments/service-health');
+    $client->set(['connect_timeout' => 0.2, 'timeout' => 0.6, 'keep_alive' => false]);
+    $client->setHeaders(['Accept' => 'application/json']);
+    $ok = $client->get('/payments/service-health');
 
     $statusCode = $client->getStatusCode();
     $body = $client->getBody();
     $client->close();
 
-    if ($statusCode === 200 && $body !== false) {
-        return json_decode($body, true);
+    if ($ok && $statusCode === 200 && $body !== false) {
+        $data = json_decode($body, true);
+        if (is_array($data)) {
+            return $data;
+        }
     }
-
     return null;
 }
 
@@ -70,21 +65,22 @@ function chooseProcessor(array $hosts): int
     $default = $hosts['default'] ?? null;
     $fallback = $hosts['fallback'] ?? null;
 
-    $defaultHealthy = is_array($default) && ($default['failing'] ?? true) === false;
-    $fallbackHealthy = is_array($fallback) && ($fallback['failing'] ?? true) === false;
+    $defaultHealthy = is_array($default) && (($default['failing'] ?? true) === false);
+    $fallbackHealthy = is_array($fallback) && (($fallback['failing'] ?? true) === false);
 
-    if ($defaultHealthy && $fallbackHealthy) {
-        $defaultTime = (int)($default['minResponseTime'] ?? PHP_INT_MAX);
-        $fallbackTime = (int)($fallback['minResponseTime'] ?? PHP_INT_MAX);
-
-        return $defaultTime <= $fallbackTime ? 1 : 2;
-    }
-
-    if ($defaultHealthy) {
+    if (!$fallbackHealthy) {
         return 1;
     }
-    if ($fallbackHealthy) {
+    if (!$defaultHealthy) {
         return 2;
+    }
+
+    if (isset($default['minResponseTime'], $fallback['minResponseTime'])) {
+        $defaultResTime = (int)$default['minResponseTime'];
+        $fallbackResTime = (int)$fallback['minResponseTime'];
+        if ($fallbackResTime > 0 && $defaultResTime > ($fallbackResTime * 3)) {
+            return 2;
+        }
     }
 
     return 1;
