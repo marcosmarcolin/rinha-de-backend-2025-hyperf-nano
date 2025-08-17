@@ -89,15 +89,10 @@ $server->on("request", function (Request $request, Response $response) {
 
     if ($method === 'POST' && $path === '/payments') {
         $response->end();
-        $body = json_decode($request->rawContent() ?: '{}', false);
-
         /** @var Redis $Redis */
         [$Redis, $fromPool] = redisBorrow();
         try {
-            $Redis->lPush('payment_jobs', json_encode([
-                'correlationId' => $body->correlationId,
-                'amount' => $body->amount
-            ]));
+            $Redis->lPush('payment_jobs', $request->rawContent() ?: '{}');
         } finally {
             redisRelease($Redis, $fromPool);
         }
